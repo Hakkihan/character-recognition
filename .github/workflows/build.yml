@@ -1,0 +1,70 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    name: Build wheel for ${{ matrix.config.build }}-${{ matrix.config.platform }}
+
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-22.04, arch: x86_64, platform: manylinux_x86_64, build: cp*, tag: cpall }
+          - { os: ubuntu-22.04, arch: aarch64, platform: manylinux_aarch64, build: cp312, tag: cp312 }
+          - { os: ubuntu-22.04, arch: aarch64, platform: manylinux_aarch64, build: cp311, tag: cp311 }
+          - { os: ubuntu-22.04, arch: aarch64, platform: manylinux_aarch64, build: cp310, tag: cp310 }
+          - { os: ubuntu-22.04, arch: aarch64, platform: manylinux_aarch64, build: cp39, tag: cp39 }
+          - { os: ubuntu-22.04, arch: aarch64, platform: manylinux_aarch64, build: cp38, tag: cp38 }
+          - { os: ubuntu-22.04, arch: x86_64, platform: musllinux_x86_64, build: cp*, tag: cpall }
+          - { os: macos-12,     arch: x86_64, platform: macosx_x86_64, build: cp*, tag: cpall }
+          - { os: macos-12,     arch: arm64,  platform: macosx_arm64, build: cp*, tag: cpall }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: Build wheel
+        uses: pypa/cibuildwheel@v2.17.0
+        env:
+          CIBW_ARCHS: "${{ matrix.config.arch }}"
+          CIBW_BUILD: "${{ matrix.config.build }}-${{ matrix.config.platform }}"
+          CIBW_SKIP: "cp36* cp37*"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "wheels-${{ matrix.config.platform }}-${{ matrix.config.tag }}"
+          path: ./wheelhouse/*.whl
+
+  build_sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Build sdist
+        run: python setup.py sdist
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: ./dist/*
